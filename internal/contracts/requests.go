@@ -8,6 +8,20 @@ type RegisterSpecimenRequest struct {
 	JacketNotes   string `json:"jacket_notes"`
 }
 
+type AmendSpecimenRequest struct {
+	TaxonHint       *string `json:"taxon_hint"`
+	MatrixKind      *string `json:"matrix_kind"`
+	JacketNotes     *string `json:"jacket_notes"`
+	Reason          string  `json:"reason"`
+	ExpectedVersion int     `json:"expected_version"`
+	RequestID       string  `json:"request_id,omitempty"`
+}
+
+type ReevaluationRequest struct {
+	ReviewedBy string `json:"reviewed_by"`
+	Note       string `json:"note"`
+}
+
 type CreatePlanRequest struct {
 	Objective      string `json:"objective"`
 	Method         string `json:"method"`

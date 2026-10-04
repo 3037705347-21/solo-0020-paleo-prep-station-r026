@@ -27,11 +27,33 @@ go run ./cmd/paleo-prep-station --addr 127.0.0.1:18133
 
 - `GET /specimens` 与 `POST /specimens`
 - `GET /specimens/{id}`
+- `PATCH /specimens/{id}`：更正未完成修复标本的分类提示、基质类型或夹克备注
+- `GET /specimens/{id}/amendments`：查阅标本资料更正历史
 - `POST /specimens/{id}/plans`
 - `GET /plans/{id}`
 - `POST /plans/{id}/approval`
+- `POST /plans/{id}/reevaluation`：确认资料更正后草稿方案的方法与目标仍然成立
 - `POST /plans/{id}/progress`
 - `POST /specimens/{id}/release`
+
+### 标本资料更正
+
+标本尚未完成修复时，可通过 `PATCH /specimens/{id}` 带原因更正资料：
+
+```json
+{
+  "matrix_kind": "泥岩",
+  "reason": "岩性薄片复核，基质由粉砂岩改为泥岩",
+  "expected_version": 4,
+  "request_id": "amend-2026-0005"
+}
+```
+
+- `expected_version` 必填，必须与当前标本版本一致，否则返回 `409 specimen_version_conflict`。
+- 至少一个字段发生真实变化；无变化返回 `409 specimen_unchanged`，不递增版本。
+- 基质类型或分类提示变化影响方案方法与目标：草稿方案会被置为待重新评估（审批前必须调用 `POST /plans/{id}/reevaluation`）；已审批或进行中的方案直接返回 `409 plan_references_specimen_data`。夹克备注不影响方案。
+- `stabilized` 或 `available` 标本返回 `409 specimen_not_amendable`。
+- 重复提交携带相同 `request_id` 会确定性重放首次结果；同一凭证用于不同内容返回 `409 idempotency_key_reused`。
 
 ## 本地验证
 
@@ -39,6 +61,7 @@ go run ./cmd/paleo-prep-station --addr 127.0.0.1:18133
 
 ```bash
 go run ./cmd/workflowcheck --workflow register-specimen
+go run ./cmd/workflowcheck --workflow amend-specimen
 go run ./cmd/workflowcheck --workflow approve-prep-plan
 go run ./cmd/workflowcheck --workflow log-preparation
 go run ./cmd/workflowcheck --workflow release-for-study

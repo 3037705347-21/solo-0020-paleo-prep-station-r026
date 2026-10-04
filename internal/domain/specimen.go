@@ -79,6 +79,14 @@ func (s Specimen) CanCreatePlan() bool {
 	return s.Status == SpecimenRegistered || s.Status == SpecimenPlanned
 }
 
+// CanAmend reports whether registration data may still be corrected: only
+// specimens that have not finished preparation can be amended.
+func (s Specimen) CanAmend() bool {
+	return s.Status == SpecimenRegistered ||
+		s.Status == SpecimenPlanned ||
+		s.Status == SpecimenPreparing
+}
+
 func (s Specimen) IsStable() bool {
 	return s.Status == SpecimenStabilized
 }
