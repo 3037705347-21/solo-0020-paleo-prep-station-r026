@@ -12,6 +12,7 @@ type state struct {
 	plans     map[string]domain.PrepPlan
 	progress  map[string][]domain.ProgressEntry
 	releases  map[string]domain.ReleaseRecord
+	revisions map[string][]domain.SpecimenRevision
 }
 
 type MemoryRepository struct {
@@ -26,6 +27,7 @@ func NewMemory() *MemoryRepository {
 			plans:     make(map[string]domain.PrepPlan),
 			progress:  make(map[string][]domain.ProgressEntry),
 			releases:  make(map[string]domain.ReleaseRecord),
+			revisions: make(map[string][]domain.SpecimenRevision),
 		},
 	}
 }
@@ -54,6 +56,7 @@ func cloneMutation(source state) *Mutation {
 		plans:     make(map[string]domain.PrepPlan, len(source.plans)),
 		progress:  make(map[string][]domain.ProgressEntry, len(source.progress)),
 		releases:  make(map[string]domain.ReleaseRecord, len(source.releases)),
+		revisions: make(map[string][]domain.SpecimenRevision, len(source.revisions)),
 	}
 	for key, value := range source.specimens {
 		copied.specimens[key] = value
@@ -66,6 +69,9 @@ func cloneMutation(source state) *Mutation {
 	}
 	for key, value := range source.releases {
 		copied.releases[key] = value
+	}
+	for key, values := range source.revisions {
+		copied.revisions[key] = append([]domain.SpecimenRevision(nil), values...)
 	}
 	return &Mutation{state: copied}
 }
@@ -142,6 +148,34 @@ func (m *Mutation) HasOpenPlan(specimenID string) bool {
 		}
 	}
 	return false
+}
+
+// OpenPlanForSpecimen returns the currently open plan, if any. At most one
+// open plan per specimen is allowed by the service invariants.
+func (m *Mutation) OpenPlanForSpecimen(specimenID string) (domain.PrepPlan, bool) {
+	var found domain.PrepPlan
+	exists := false
+	for _, value := range m.state.plans {
+		if value.SpecimenID == specimenID && value.IsOpen() {
+			found = value
+			exists = true
+		}
+	}
+	return found, exists
+}
+
+func (m *Mutation) RevisionsForSpecimen(specimenID string) []domain.SpecimenRevision {
+	values := append([]domain.SpecimenRevision(nil), m.state.revisions[specimenID]...)
+	sort.Slice(values, func(i, j int) bool {
+		return values[i].Sequence < values[j].Sequence
+	})
+	return values
+}
+
+func (m *Mutation) AppendRevision(value domain.SpecimenRevision) {
+	m.state.revisions[value.SpecimenID] = append(
+		m.state.revisions[value.SpecimenID], value,
+	)
 }
 
 func (m *Mutation) ProgressForPlan(planID string) []domain.ProgressEntry {

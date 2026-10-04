@@ -26,12 +26,16 @@ go run ./cmd/paleo-prep-station --addr 127.0.0.1:18133
 ## 主要接口
 
 - `GET /specimens` 与 `POST /specimens`
-- `GET /specimens/{id}`
+- `GET /specimens/{id}` 与 `PATCH /specimens/{id}`
+- `GET /specimens/{id}/revisions`
 - `POST /specimens/{id}/plans`
 - `GET /plans/{id}`
 - `POST /plans/{id}/approval`
+- `POST /plans/{id}/reevaluation`
 - `POST /plans/{id}/progress`
 - `POST /specimens/{id}/release`
+
+`PATCH /specimens/{id}` 用于修复完成前带原因的资料修改：请求体部分包含 `taxon_hint`、`matrix_kind`、`jacket_notes`，并要求 `reason` 与 `expected_version`。影响方法与目标的分类提示或基质类型修改会对当前草稿方案标记重新评估；已审批未开始的方案默认拒绝，携带 `force_reevaluation=true` 时退回草稿重新评估；制备中只允许改夹克备注；稳定或放行后资料冻结。
 
 ## 本地验证
 
@@ -42,6 +46,9 @@ go run ./cmd/workflowcheck --workflow register-specimen
 go run ./cmd/workflowcheck --workflow approve-prep-plan
 go run ./cmd/workflowcheck --workflow log-preparation
 go run ./cmd/workflowcheck --workflow release-for-study
+go run ./cmd/workflowcheck --workflow amend-specimen
+go run ./cmd/workflowcheck --workflow amend-plan-reevaluation
+go run ./cmd/workflowcheck --workflow amend-lock-and-conflict
 ```
 
 这些检查会启动临时 HTTP 处理器并调用真实公共路由。

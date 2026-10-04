@@ -75,12 +75,113 @@ func NewSpecimen(
 	}, nil
 }
 
+// AmendInput carries a partial correction of registration-time data.
+// Pointer fields distinguish "field omitted" from "field cleared".
+type AmendInput struct {
+	TaxonHint   *string
+	MatrixKind  *string
+	JacketNotes *string
+}
+
+// AmendImpact describes whether a correction touches the assumptions
+// behind the current method and objective.
+type AmendImpact struct {
+	TaxonHintChanged   bool
+	MatrixKindChanged  bool
+	JacketNotesChanged bool
+}
+
+func (i AmendImpact) AffectsPlan() bool {
+	return i.TaxonHintChanged || i.MatrixKindChanged
+}
+
+func (i AmendImpact) Any() bool {
+	return i.TaxonHintChanged || i.MatrixKindChanged || i.JacketNotesChanged
+}
+
+// ChangedFields lists the JSON field names touched by the amendment.
+func (i AmendImpact) ChangedFields() []string {
+	fields := make([]string, 0, 3)
+	if i.TaxonHintChanged {
+		fields = append(fields, "taxon_hint")
+	}
+	if i.MatrixKindChanged {
+		fields = append(fields, "matrix_kind")
+	}
+	if i.JacketNotesChanged {
+		fields = append(fields, "jacket_notes")
+	}
+	return fields
+}
+
 func (s Specimen) CanCreatePlan() bool {
 	return s.Status == SpecimenRegistered || s.Status == SpecimenPlanned
 }
 
 func (s Specimen) IsStable() bool {
 	return s.Status == SpecimenStabilized
+}
+
+// CanAmend reports whether preparation is still open for corrections.
+// Stabilized and released specimens are frozen.
+func (s Specimen) CanAmend() bool {
+	return s.Status == SpecimenRegistered ||
+		s.Status == SpecimenPlanned ||
+		s.Status == SpecimenPreparing
+}
+
+// Amend applies a correction with reason. It validates input the same way
+// registration does and bumps the version only when something changed.
+func (s *Specimen) Amend(input AmendInput, now time.Time) (AmendImpact, error) {
+	if !s.CanAmend() {
+		switch s.Status {
+		case SpecimenStabilized:
+			return AmendImpact{}, contracts.Conflict("specimen_locked_stabilized", "标本已稳定，不能直接改写登记资料")
+		default:
+			return AmendImpact{}, contracts.Conflict("specimen_locked_released", "标本已放行，资料永久冻结")
+		}
+	}
+
+	next := *s
+	impact := AmendImpact{}
+
+	if input.TaxonHint != nil {
+		value, err := optionalText("分类提示", *input.TaxonHint, 120)
+		if err != nil {
+			return AmendImpact{}, err
+		}
+		if value != s.TaxonHint {
+			next.TaxonHint = value
+			impact.TaxonHintChanged = true
+		}
+	}
+	if input.MatrixKind != nil {
+		value, err := requiredText("基质类型", *input.MatrixKind, 60)
+		if err != nil {
+			return AmendImpact{}, err
+		}
+		if value != s.MatrixKind {
+			next.MatrixKind = value
+			impact.MatrixKindChanged = true
+		}
+	}
+	if input.JacketNotes != nil {
+		value, err := optionalText("夹克备注", *input.JacketNotes, 500)
+		if err != nil {
+			return AmendImpact{}, err
+		}
+		if value != s.JacketNotes {
+			next.JacketNotes = value
+			impact.JacketNotesChanged = true
+		}
+	}
+	if !impact.Any() {
+		return AmendImpact{}, contracts.Conflict("no_specimen_change", "提交内容与当前资料一致，未产生修改")
+	}
+	next.Version = s.Version + 1
+	next.UpdatedAt = now.UTC()
+	*s = next
+	return impact, nil
 }
 
 func (s *Specimen) MarkPlanned(now time.Time) error {

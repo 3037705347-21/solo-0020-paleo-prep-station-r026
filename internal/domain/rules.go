@@ -48,3 +48,13 @@ func validatePercent(value int) error {
 	}
 	return nil
 }
+
+// ValidateRevisionReason ensures every data correction carries a reason.
+func ValidateRevisionReason(value string) (string, error) {
+	return requiredText("修改原因", value, 300)
+}
+
+// ValidateActorName ensures an actor recorded on a workflow action is present.
+func ValidateActorName(field, value string, max int) (string, error) {
+	return requiredText(field, value, max)
+}
